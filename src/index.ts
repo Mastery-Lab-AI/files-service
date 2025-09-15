@@ -1,4 +1,7 @@
 import express from "express";
+import "dotenv/config";
+
+import { createFile } from "./controllers/filesController";
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8080;
@@ -16,6 +19,9 @@ app.get("/health", (_req, res) => {
 app.get("/", (_req, res) => {
   res.send("Files Service - running");
 });
+app.post("/workspace/:workspaceId/files", createFile);
+
+export default app;
 
 app.listen(PORT, () => {
   console.log(`Files Service listening on port ${PORT}`);
