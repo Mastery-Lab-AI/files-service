@@ -6,8 +6,15 @@ export async function createFile(req: Request, res: Response) {
     const { workspaceId } = req.params;
     const { type, name, studentId } = req.body;
 
+    const accessToken = req.headers.authorization?.replace("Bearer ", "");
+    if (!accessToken) {
+      throw new Error("Unauthorized");
+    }
+
+    const connection = supabase(accessToken);
+
     // insert row into files table
-    const { data, error } = await supabase
+    const { data, error } = await connection
       .from("workspace_files")
       .insert([
         {
