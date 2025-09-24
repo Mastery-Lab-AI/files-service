@@ -1,15 +1,15 @@
 import { Request, Response } from "express";
 import { supabase } from "../lib/supabase";
 
-export async function createFile(req: Request, res: Response) {
-  try {
-    const { workspaceId } = req.params;
-    const { type, name, studentId } = req.body;
-
+export class FilesController {
+  async createFile(req: Request, res: Response) {
     const accessToken = req.headers.authorization?.replace("Bearer ", "");
     if (!accessToken) {
       throw new Error("Unauthorized");
     }
+
+    const { workspaceId } = req.params;
+    const { type, name, studentId } = req.body;
 
     const connection = supabase(accessToken);
 
@@ -43,7 +43,5 @@ export async function createFile(req: Request, res: Response) {
     };
 
     return res.status(201).json(file);
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
   }
 }

@@ -1,27 +1,20 @@
 import express from "express";
 import "dotenv/config";
 
-import { createFile } from "./controllers/filesController";
+import {errorHandler} from "./errorHandler";
+import healthRouter from "./routers/healthRouter";
+import fileRouter from "./routers/fileRouter";
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8080;
 
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-app.get("/health", (_req, res) => {
-  res.status(200).json({
-    status: "ok",
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString()
-  });
-});
+app.use("/health", healthRouter)
+app.use("/files", fileRouter)
 
-app.get("/", (_req, res) => {
-  res.send("Files Service - running");
-});
-app.post("/workspace/:workspaceId/files", createFile);
-
-export default app;
+app.use(errorHandler);
 
 app.listen(PORT, () => {
   console.log(`Files Service listening on port ${PORT}`);
