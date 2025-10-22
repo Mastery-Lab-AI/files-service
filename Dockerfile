@@ -1,7 +1,7 @@
 # ----------------------------
 # Stage 1: Build the TypeScript app
 # ----------------------------
-FROM node:18-alpine AS builder
+FROM node:25-alpine AS builder
 
 # set working directory inside container
 WORKDIR /app
@@ -22,7 +22,7 @@ RUN npm run build
 # ----------------------------
 # Stage 2: Run the compiled app
 # ----------------------------
-FROM node:18-alpine AS runtime
+FROM node:25-alpine AS runtime
 
 WORKDIR /app
 
@@ -38,4 +38,4 @@ ENV NODE_ENV=production
 EXPOSE 8080
 
 # run app
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/server.js"]
