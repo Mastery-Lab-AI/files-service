@@ -16,6 +16,10 @@ app.use("/files", fileRouter)
 
 app.use(errorHandler);
 
-app.listen(PORT, () => {
-  console.log(`Files Service listening on port ${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Files Service listening on port ${PORT}`);
+  });
+}
+
+export default app;
