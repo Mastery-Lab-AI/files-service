@@ -5,7 +5,7 @@ const router = express.Router();
 
 const controller = new FilesController();
 
-router.post("/workspace/:workspaceId", controller.createFile);
+router.post("/", controller.createFile);
 
 export default router;
 

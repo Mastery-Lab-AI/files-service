@@ -2,14 +2,15 @@ import { Request, Response } from "express";
 import { supabase } from "../lib/supabase";
 
 export class FilesController {
+  
   async createFile(req: Request, res: Response) {
+    console.log("Creating file with body:", req.body);
     const accessToken = req.headers.authorization?.replace("Bearer ", "");
     if (!accessToken) {
       throw new Error("Unauthorized");
     }
 
-    const { workspaceId } = req.params;
-    const { type, name, studentId } = req.body;
+    const { workspace_id, name, student_id, type } = req.body;
 
     const connection = supabase(accessToken);
 
@@ -18,8 +19,8 @@ export class FilesController {
       .from("workspace_files")
       .insert([
         {
-          workspace_id: workspaceId,
-          student_id: studentId, // should come from auth later
+          workspace_id: workspace_id,
+          student_id: student_id, // should come from auth later, get auth to get student id
           type,
           name,
         },
@@ -28,7 +29,7 @@ export class FilesController {
       .single();
 
     if (error) {
-      return res.status(400).json({ error: error.message });
+      return res.status(500).json({ error: error.message });
     }
 
     const file = {
