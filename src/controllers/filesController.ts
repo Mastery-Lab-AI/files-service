@@ -1,9 +1,10 @@
 import { Request, Response } from "express";
 import { supabase } from "../lib/supabase";
 
+
 export class FilesController {
   
-  async createFile(req: Request, res: Response) {
+  async createFile(req: AuthzRequest, res: Response) {
     console.log("Creating file with body:", req.body);
 
     const accessToken = req.headers.authorization?.replace("Bearer ", "");
