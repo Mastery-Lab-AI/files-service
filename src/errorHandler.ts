@@ -6,5 +6,5 @@ export const errorHandler = (
   res: Response,
   next: NextFunction
 ) => {
-  next();
+  next(error);
 }
