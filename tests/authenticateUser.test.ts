@@ -24,7 +24,7 @@ describe("authenticateUser middleware", () => {
     expect(res.status).toBe(401);
   });
 
-  it("attaches studentId from user_metadata.student_id", async () => {
+  it("attaches studentId from auth.uid() (ignoring metadata)", async () => {
     (supabaseAnon.auth.getUser as jest.Mock).mockResolvedValueOnce({
       data: { user: { id: "user-1", user_metadata: { student_id: "stu-123" } } },
       error: null,
@@ -35,10 +35,10 @@ describe("authenticateUser middleware", () => {
       .set("Authorization", "Bearer valid-token");
 
     expect(res.status).toBe(200);
-    expect(res.body.studentId).toBe("stu-123");
+    expect(res.body.studentId).toBe("user-1");
   });
 
-  it("falls back to user.id when metadata missing", async () => {
+  it("uses auth.uid() when metadata missing", async () => {
     (supabaseAnon.auth.getUser as jest.Mock).mockResolvedValueOnce({
       data: { user: { id: "user-xyz", user_metadata: {} } },
       error: null,

@@ -61,14 +61,14 @@ describe("POST /files", () => {
     expect(res.body).toHaveProperty("error");
   });
 
-  it("creates file with studentId from auth, ignoring body student_id", async () => {
+  it("creates file with studentId from auth.uid(), ignoring body student_id", async () => {
     (supabaseAnon.auth.getUser as jest.Mock).mockResolvedValue({ data: { user: { id: "u1", user_metadata: { student_id: "stu-good" } } }, error: null });
 
     const single = jest.fn().mockResolvedValue({
       data: {
         id: "file-1",
         type: "note",
-        student_id: "stu-good",
+        student_id: "u1",
         workspace_id: uuid,
         name: "Doc",
         created_at: "2024-01-01T00:00:00.000Z",
@@ -87,10 +87,10 @@ describe("POST /files", () => {
       .send({ workspace_id: uuid, name: "Doc", type: "note", student_id: "evil" });
 
     expect(res.status).toBe(201);
-    expect(res.body.studentId).toBe("stu-good");
-    expect(from).toHaveBeenCalledWith("files");
+    expect(res.body.studentId).toBe("u1");
+    expect(from).toHaveBeenCalledWith("workspace_files");
     expect(insert).toHaveBeenCalledWith([
-      expect.objectContaining({ workspace_id: uuid, student_id: "stu-good", type: "note", name: "Doc" })
+      expect.objectContaining({ workspace_id: uuid, student_id: "u1", type: "note", name: "Doc" })
     ]);
   });
 });
