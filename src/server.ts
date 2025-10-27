@@ -4,6 +4,7 @@ import "dotenv/config";
 import {errorHandler} from "./errorHandler";
 import healthRouter from "./routers/healthRouter";
 import fileRouter from "./routers/fileRouter";
+import workspaceRouter from "./routers/workspaceRouter";
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8080;
@@ -12,6 +13,7 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 app.use("/health", healthRouter)
+app.use("/workspace", workspaceRouter)
 app.use("/files", fileRouter)
 
 app.use(errorHandler);
