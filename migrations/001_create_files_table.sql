@@ -1,4 +1,4 @@
-create table if not exists files (
+create table if not exists workspace_files (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null,
   student_id uuid not null,

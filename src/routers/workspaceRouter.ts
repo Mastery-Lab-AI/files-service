@@ -13,4 +13,11 @@ router.get(
   asyncHandler(controller.listFiles.bind(controller))
 );
 
+// GET /workspace/:workspaceId/files/:fileId/content
+router.get(
+  "/:workspaceId/files/:fileId/content",
+  authenticateUser,
+  asyncHandler(controller.getFileContent.bind(controller))
+);
+
 export default router;

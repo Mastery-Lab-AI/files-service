@@ -1,5 +1,9 @@
 import { Response } from "express";
 import { supabase } from "../lib/supabase";
+import { buildFileObjectPath, readObject } from "../lib/gcs";
+import { parsePagination, toRange, buildPageMeta } from "../utils/pagination";
+import { isAllowedFileType, isUUID } from "../utils/validation";
+import { buildContentRef, toFileListItem } from "../mappers/fileMapper";
 import crypto from "node:crypto";
 import { AuthzRequest } from "../types/authz";
 import { requireAuthenticatedUser } from "../utils/authz";
@@ -26,9 +30,6 @@ export class FilesController {
     const wsId = workspaceId ?? workspace_id;
 
     // Validate inputs (ticket requires: type === "note", non-empty name, UUID workspaceId)
-    const isUUID = (v?: string) =>
-      typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
-
     if (!isUUID(wsId)) {
       return res.status(400).json({ error: "Invalid workspace_id" });
     }
@@ -68,7 +69,7 @@ export class FilesController {
         studentId: data.student_id,
         workspaceId: data.workspace_id,
         name: data.name,
-        contentRef: `/files/${data.id}/content`,
+        contentRef: buildContentRef(data.workspace_id, data.id),
         createdAt: data.created_at,
         updatedAt: data.updated_at,
       };
@@ -83,7 +84,7 @@ export class FilesController {
       studentId,
       workspaceId: wsId,
       name,
-      contentRef: `/files/${id}/content`,
+      contentRef: buildContentRef(wsId, id),
       createdAt: now,
       updatedAt: now,
       // Note: created without DB round-trip; verify in Supabase if needed
@@ -92,6 +93,7 @@ export class FilesController {
 
   // GET /workspace/:workspaceId/files?type=note|whiteboard|graph
   async listFiles(req: AuthzRequest, res: Response) {
+    const startedAt = Date.now();
     const accessToken = req.headers.authorization?.replace("Bearer ", "");
     if (!accessToken) {
       return res.status(401).json({ error: "Unauthorized" });
@@ -100,21 +102,27 @@ export class FilesController {
     const { workspaceId } = req.params as { workspaceId: string };
     const { type } = req.query as { type?: string };
 
-    const isUUID = (v?: string) =>
-      typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
-
     if (!isUUID(workspaceId)) {
       return res.status(400).json({ error: "Invalid workspaceId" });
     }
 
-    if (type && !["note", "whiteboard", "graph"].includes(type)) {
+    if (type && !isAllowedFileType(type)) {
       return res.status(400).json({ error: "Invalid type" });
     }
 
     const { studentId } = requireAuthenticatedUser(req);
 
-    const pageSize = Math.max(1, Math.min(100, Number(req.query.pageSize) || 10));
-    const pageStart = Math.max(0, Number(req.query.pageStart) || 0);
+    // Basic request log for observability (no sensitive data)
+    try {
+      console.log(
+        `[FILES] listFiles request workspaceId=${workspaceId} studentId=${studentId} type=${type ?? "-"} pageStart=${req.query.pageStart ?? 0} pageSize=${req.query.pageSize ?? 10}`
+      );
+    } catch {}
+
+    const { pageSize, pageStart } = parsePagination(req.query as any, {
+      defaultSize: 10,
+      maxSize: 100,
+    });
 
     const connection = supabase(accessToken);
 
@@ -131,37 +139,89 @@ export class FilesController {
     }
 
     // Pagination using range (offset-based)
-    const from = pageStart;
-    const to = pageStart + pageSize - 1;
+    const { from, to } = toRange(pageStart, pageSize);
     const { data, count, error } = await q.range(from, to);
 
     if (error) {
+      try {
+        console.error(
+          `[FILES] listFiles error workspaceId=${workspaceId} studentId=${studentId}: ${error.message || error}`
+        );
+      } catch {}
       return res.status(500).json({ error: error.message || "Failed to fetch files" });
     }
 
     const total = count || 0;
-    const hasMore = pageStart + (data?.length || 0) < total;
+    const items = (data || []).map((row: any) => toFileListItem(row));
+    const pagination = buildPageMeta(total, pageSize, pageStart, items.length);
 
-    const mapped = (data || []).map((row: any) => ({
-      id: row.id,
-      type: row.type,
-      studentId: row.student_id,
-      workspaceId: row.workspace_id,
-      name: row.name,
-      contentRef: `/workspace/${row.workspace_id}/files/${row.id}/content`,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    }));
+    const responsePayload = {
+      pagination,
+      data: items,
+    };
 
-    return res.json({
-      pagination: {
-        total,
-        pageSize,
-        pageStart,
-        hasMore,
-      },
-      data: mapped,
-    });
+    try {
+      const duration = Date.now() - startedAt;
+      console.log(
+        `[FILES] listFiles success workspaceId=${workspaceId} studentId=${studentId} returned=${items.length} total=${total} hasMore=${pagination.hasMore} durationMs=${duration}`
+      );
+    } catch {}
+
+    return res.json(responsePayload);
+  }
+
+  // GET /workspace/:workspaceId/files/:fileId/content
+  async getFileContent(req: AuthzRequest, res: Response) {
+    const accessToken = req.headers.authorization?.replace("Bearer ", "");
+    if (!accessToken) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { workspaceId, fileId } = req.params as { workspaceId: string; fileId: string };
+
+    if (!isUUID(workspaceId) || !isUUID(fileId)) {
+      return res.status(400).json({ error: "Invalid identifiers" });
+    }
+
+    const { studentId } = requireAuthenticatedUser(req);
+
+    const connection = supabase(accessToken);
+
+    // Verify the file exists and belongs to this student in this workspace
+    const { data: file, error } = await connection
+      .from("workspace_files")
+      .select("*")
+      .eq("id", fileId)
+      .eq("workspace_id", workspaceId)
+      .eq("student_id", studentId)
+      .single();
+
+    if (error || !file) {
+      return res.status(404).json({ error: "File not found" });
+    }
+
+    const objectPath = buildFileObjectPath(workspaceId, fileId);
+    try {
+      const obj = await readObject(objectPath);
+      if (!obj) {
+        return res.status(404).json({ error: "Content not found" });
+      }
+
+      const { contentType, buffer } = obj;
+      if (contentType && contentType.includes("application/json")) {
+        try {
+          const parsed = JSON.parse(buffer.toString("utf-8"));
+          return res.status(200).json(parsed);
+        } catch (_e) {
+          // Fall through and return raw text if JSON parse fails
+        }
+      }
+
+      // Default: return as raw bytes/text with content type if available
+      if (contentType) res.type(contentType);
+      return res.status(200).send(buffer);
+    } catch (e: any) {
+      return res.status(500).json({ error: e?.message || "Failed to fetch content" });
+    }
   }
 }
-
