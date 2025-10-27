@@ -1,11 +1,13 @@
 import { NextFunction, Request, Response } from "express";
 import { supabaseAnon } from "../lib/supabase";
 
-// Chat-history style authentication adapted for files-service
+// Auth middleware (aligned with chat-history with project-specific addition):
 // - Skips OPTIONS
-// - Validates Bearer token
-// - Verifies JWT with Supabase
-// - Attaches user, userId, and studentId to request
+// - Requires an Authorization: Bearer <JWT>
+// - Verifies the JWT using Supabase anon client
+// - Attaches identity to request: user, userId, and studentId
+//   NOTE: For SB-28 we always set studentId = auth.uid() (user.id)
+//   to guarantee UUID alignment with RLS and schema.
 export async function authenticateUser(
   req: Request,
   res: Response,

@@ -1,17 +1,16 @@
 import express from "express";
-import { FilesController } from "../controllers/filesController";
 import { authenticateUser } from "../middleware/authenticateUser";
+import { FilesController } from "../controllers/filesController";
 import { asyncHandler } from "../errorHandler";
 
 const router = express.Router();
-
 const controller = new FilesController();
 
-router.post(
-  "/",
+// GET /workspace/:workspaceId/files?type=note|whiteboard|graph
+router.get(
+  "/:workspaceId/files",
   authenticateUser,
-  asyncHandler(controller.createFile.bind(controller))
+  asyncHandler(controller.listFiles.bind(controller))
 );
 
 export default router;
-
