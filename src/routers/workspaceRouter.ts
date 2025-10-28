@@ -20,4 +20,24 @@ router.get(
   asyncHandler(controller.getFileContent.bind(controller))
 );
 
+// GET /workspace/:workspaceId/notes/:noteId/content
+// Returns the content of a note for the authenticated user.
+// - Enforces type === 'note' and workspace/ownership checks.
+// - Reads from GCS at workspace/<ws>/notes/<id>; falls back to legacy files/<id>.
+router.get(
+  "/:workspaceId/notes/:noteId/content",
+  authenticateUser,
+  asyncHandler(controller.getNoteContent.bind(controller))
+);
+
+// PUT /workspace/:workspaceId/notes/:noteId/content
+// Upload/replace note content for the authenticated user.
+// - Enforces type === 'note' and workspace/ownership checks.
+// - Writes JSON (or raw body) to GCS at workspace/<ws>/notes/<id>.
+router.put(
+  "/:workspaceId/notes/:noteId/content",
+  authenticateUser,
+  asyncHandler(controller.putNoteContent.bind(controller))
+);
+
 export default router;

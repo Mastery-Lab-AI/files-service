@@ -75,7 +75,7 @@ describe("GET /workspace/:workspaceId/files", () => {
       studentId: "u1",
       workspaceId: uuid,
       name: "Doc 1",
-      contentRef: `/workspace/${uuid}/files/f1/content`,
+      contentRef: `/workspace/${uuid}/notes/f1/content`,
     });
   });
 });
