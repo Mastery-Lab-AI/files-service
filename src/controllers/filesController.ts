@@ -356,4 +356,139 @@ export class FilesController {
       return res.status(500).json({ error: e?.message || "Failed to write content" });
     }
   }
+
+  /**
+   * Convenience APIs for default workspace = authenticated student id
+   * These power the frontend's simple /files/notes integration without
+   * requiring the client to manage workspace ids explicitly.
+   */
+  async listMyNotes(req: AuthzRequest, res: Response) {
+    const accessToken = req.headers.authorization?.replace("Bearer ", "");
+    if (!accessToken) return res.status(401).json({ error: "Unauthorized" });
+
+    const { studentId } = requireAuthenticatedUser(req);
+    const connection = supabase(accessToken);
+
+    const order = connection
+      .from("workspace_files")
+      .select("*")
+      .eq("student_id", studentId)
+      .eq("workspace_id", studentId)
+      .eq("type", "note")
+      .order("updated_at", { ascending: false });
+
+    const { data, error } = await order;
+    if (error) return res.status(500).json({ error: error.message });
+
+    const out = (data || []).map((row) => ({
+      id: row.id,
+      title: row.name,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+    return res.status(200).json(out);
+  }
+
+  async getMyNote(req: AuthzRequest, res: Response) {
+    const accessToken = req.headers.authorization?.replace("Bearer ", "");
+    if (!accessToken) return res.status(401).json({ error: "Unauthorized" });
+
+    const { studentId } = requireAuthenticatedUser(req);
+    const { noteId } = req.params as { noteId: string };
+    if (!isUUID(noteId)) return res.status(400).json({ error: "Invalid id" });
+
+    const connection = supabase(accessToken);
+    const { data: row, error } = await connection
+      .from("workspace_files")
+      .select("*")
+      .eq("id", noteId)
+      .eq("workspace_id", studentId)
+      .eq("student_id", studentId)
+      .eq("type", "note")
+      .single();
+
+    if (error || !row) return res.status(404).json({ error: "Note not found" });
+
+    // Try to read content from notes path
+    const notesPath = `workspace/${studentId}/notes/${noteId}`;
+    try {
+      const obj = await readObject(notesPath);
+      let content: string | undefined = undefined;
+      if (obj) {
+        const { buffer, contentType } = obj;
+        if (contentType && contentType.includes("application/json")) {
+          try {
+            const parsed = JSON.parse(buffer.toString("utf-8"));
+            content = typeof parsed === "string" ? parsed : parsed?.content ?? JSON.stringify(parsed);
+          } catch {
+            content = buffer.toString("utf-8");
+          }
+        } else {
+          content = buffer.toString("utf-8");
+        }
+      }
+
+      return res.status(200).json({
+        id: row.id,
+        title: row.name,
+        content,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      });
+    } catch (e: any) {
+      return res.status(500).json({ error: e?.message || "Failed to load note" });
+    }
+  }
+
+  async createMyNote(req: AuthzRequest, res: Response) {
+    const accessToken = req.headers.authorization?.replace("Bearer ", "");
+    if (!accessToken) return res.status(401).json({ error: "Unauthorized" });
+
+    const { studentId } = requireAuthenticatedUser(req);
+    const { title, content } = (req.body || {}) as { title?: string; content?: string };
+
+    const name = (title || "Untitled Note").trim();
+    if (!name) return res.status(400).json({ error: "Invalid title" });
+
+    const connection = supabase(accessToken);
+    const id = crypto.randomUUID();
+    const insertPayload = {
+      id,
+      workspace_id: studentId,
+      student_id: studentId,
+      type: "note",
+      name,
+    } as const;
+
+    const { data, error } = await connection
+      .from("workspace_files")
+      .insert([insertPayload])
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    // Write content when provided
+    if (typeof content === "string") {
+      try {
+        await writeObject(`workspace/${studentId}/notes/${id}`, content, "text/markdown; charset=utf-8");
+      } catch (e: any) {
+        // If content write fails, still return created note but flag error
+        return res.status(201).json({
+          id,
+          title: name,
+          createdAt: data?.created_at ?? new Date().toISOString(),
+          updatedAt: data?.updated_at ?? new Date().toISOString(),
+          warning: "Note created but content save failed",
+        });
+      }
+    }
+
+    return res.status(201).json({
+      id,
+      title: name,
+      createdAt: data?.created_at ?? new Date().toISOString(),
+      updatedAt: data?.updated_at ?? new Date().toISOString(),
+    });
+  }
 }
