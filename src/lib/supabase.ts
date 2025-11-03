@@ -13,8 +13,3 @@ export const supabase = (token: string) =>
       }
     }
   });
-
-// Optional service role client for server-side privileged operations
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-export const supabaseService = () =>
-  serviceKey ? createClient(supabaseUrl, serviceKey) : undefined;

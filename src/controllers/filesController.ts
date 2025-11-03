@@ -1,5 +1,5 @@
 import { Response } from "express";
-import { supabase, supabaseService } from "../lib/supabase";
+import { supabase } from "../lib/supabase";
 import { buildFileObjectPath, readObject, writeObject, deleteObject } from "../lib/gcs";
 import { parsePagination, toRange, buildPageMeta } from "../utils/pagination";
 import { isAllowedFileType, isUUID } from "../utils/validation";
@@ -35,8 +35,7 @@ export class FilesController {
 
     // Skip DB pre-check to avoid 404 due to RLS blocking SELECT; rely on filtered DELETE
 
-    // Attempt delete respecting RLS; if denied and service role configured, fallback
-    let deleted = false;
+    // Delete DB row with RLS filters; if denied, return error
     try {
       const resp: any = await connection
         .from("workspace_files")
@@ -45,37 +44,37 @@ export class FilesController {
         .eq("student_id", studentId)
         .eq("workspace_id", workspaceId)
         .eq("type", "note");
-      if (!resp?.error) {
-        deleted = true;
+      if (resp?.error) {
+        try {
+          console.log(
+            `[FILES] deleteNote error workspaceId=${workspaceId} noteId=${noteId} studentId=${studentId} err=${resp.error.message}`
+          );
+        } catch {}
+        return res.status(500).json({ error: resp.error.message });
       }
-    } catch {}
-
-    if (!deleted) {
-      const svc = supabaseService();
-      if (svc) {
-        // Double-check ownership with service client, then delete with service privileges
-        const { data: row } = await svc
-          .from("workspace_files")
-          .select("id, student_id, workspace_id, type")
-          .eq("id", noteId)
-          .single();
-        if (row && row.student_id === studentId && row.workspace_id === workspaceId && row.type === "note") {
-          const del = await svc.from("workspace_files").delete().eq("id", noteId);
-          if (!(del as any)?.error) {
-            deleted = true;
-          }
-        }
+      // Post-delete verification: ensure the row is gone
+      const verify = await connection
+        .from("workspace_files")
+        .select("id", { count: "exact", head: true })
+        .eq("id", noteId)
+        .eq("student_id", studentId)
+        .eq("workspace_id", workspaceId)
+        .eq("type", "note");
+      if ((verify as any)?.count && (verify as any).count > 0) {
+        try {
+          console.log(
+            `[FILES] deleteNote not-deleted workspaceId=${workspaceId} noteId=${noteId} studentId=${studentId}`
+          );
+        } catch {}
+        return res.status(404).json({ error: "Note not deleted" });
       }
-    }
-
-    if (!deleted) {
-      // Could not delete the DB row; do not remove GCS content to avoid orphans without metadata match
+    } catch (e: any) {
       try {
         console.log(
-          `[FILES] deleteNote not-deleted workspaceId=${workspaceId} noteId=${noteId} studentId=${studentId}`
+          `[FILES] deleteNote error workspaceId=${workspaceId} noteId=${noteId} studentId=${studentId} err=${e?.message}`
         );
       } catch {}
-      return res.status(404).json({ error: "Note not deleted" });
+      return res.status(500).json({ error: e?.message || "Delete failed" });
     }
 
     // If DB row is removed, best-effort delete of GCS content
@@ -647,8 +646,7 @@ export class FilesController {
         `[FILES] deleteMyNote request workspaceId=${studentId} noteId=${noteId} studentId=${studentId}`
       );
     } catch {}
-    // Try RLS-respecting delete first, then fallback to service role if configured
-    let deleted = false;
+    // Delete with RLS filters only
     try {
       const resp: any = await connection
         .from("workspace_files")
@@ -657,37 +655,45 @@ export class FilesController {
         .eq("student_id", studentId)
         .eq("workspace_id", studentId)
         .eq("type", "note");
-      if (!resp?.error) { deleted = true; }
-    } catch {}
-
-    if (!deleted) {
-      const svc = supabaseService();
-      if (svc) {
-        const { data: row } = await svc
-          .from("workspace_files")
-          .select("id, student_id, workspace_id, type")
-          .eq("id", noteId)
-          .single();
-        if (row && row.student_id === studentId && row.workspace_id === studentId && row.type === "note") {
-          const del = await svc.from("workspace_files").delete().eq("id", noteId);
-          if (!(del as any)?.error) { deleted = true; }
-        }
+      if (resp?.error) {
+        try {
+          console.log(
+            `[FILES] deleteMyNote error workspaceId=${studentId} noteId=${noteId} studentId=${studentId} err=${resp.error.message}`
+          );
+        } catch {}
+        return res.status(500).json({ error: resp.error.message });
       }
-    }
-
-    if (!deleted) {
+      // Verify delete
+      const verify = await connection
+        .from("workspace_files")
+        .select("id", { count: "exact", head: true })
+        .eq("id", noteId)
+        .eq("student_id", studentId)
+        .eq("workspace_id", studentId)
+        .eq("type", "note");
+      const remaining = (verify as any)?.count || 0;
+      try { console.log(`[FILES] deleteMyNote verify count=${remaining} workspaceId=${studentId} noteId=${noteId} studentId=${studentId}`); } catch {}
+      if (remaining > 0) {
+        try {
+          console.log(
+            `[FILES] deleteMyNote not-deleted workspaceId=${studentId} noteId=${noteId} studentId=${studentId}`
+          );
+        } catch {}
+        return res.status(404).json({ error: "Note not deleted" });
+      }
+      // Delete content
+      const notesPath = `workspace/${studentId}/notes/${noteId}`;
+      const legacyPath = buildFileObjectPath(studentId, noteId);
+      try { await deleteObject(notesPath); } catch {}
+      try { await deleteObject(legacyPath); } catch {}
+    } catch (e: any) {
       try {
-        console.log(`[FILES] deleteMyNote not-deleted workspaceId=${studentId} noteId=${noteId} studentId=${studentId}`);
+        console.log(
+          `[FILES] deleteMyNote error workspaceId=${studentId} noteId=${noteId} studentId=${studentId} err=${e?.message}`
+        );
       } catch {}
-      return res.status(404).json({ error: "Note not deleted" });
+      return res.status(500).json({ error: e?.message || "Delete failed" });
     }
-
-    // Delete GCS content best-effort
-    const notesPath = `workspace/${studentId}/notes/${noteId}`;
-    const legacyPath = buildFileObjectPath(studentId, noteId);
-    try { await deleteObject(notesPath); } catch {}
-    try { await deleteObject(legacyPath); } catch {}
-
     try {
       console.log(
         `[FILES] deleteMyNote success workspaceId=${studentId} noteId=${noteId} studentId=${studentId} durationMs=${Date.now() - startedAt}`
