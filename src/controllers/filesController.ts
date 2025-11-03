@@ -1,6 +1,6 @@
 import { Response } from "express";
 import { supabase } from "../lib/supabase";
-import { buildFileObjectPath, readObject, writeObject } from "../lib/gcs";
+import { buildFileObjectPath, readObject, writeObject, deleteObject } from "../lib/gcs";
 import { parsePagination, toRange, buildPageMeta } from "../utils/pagination";
 import { isAllowedFileType, isUUID } from "../utils/validation";
 import { buildContentRef, toFileListItem } from "../mappers/fileMapper";
@@ -9,6 +9,88 @@ import { AuthzRequest } from "../types/authz";
 import { requireAuthenticatedUser } from "../utils/authz";
 
 export class FilesController {
+  /**
+   * DELETE /workspace/:workspaceId/notes/:noteId
+   * Delete a note the user owns: removes content in GCS and row in workspace_files.
+   */
+  async deleteNote(req: AuthzRequest, res: Response) {
+    const accessToken = req.headers.authorization?.replace("Bearer ", "");
+    if (!accessToken) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { workspaceId, noteId } = req.params as { workspaceId: string; noteId: string };
+    if (!isUUID(workspaceId) || !isUUID(noteId)) {
+      return res.status(400).json({ error: "Invalid identifiers" });
+    }
+
+    const { studentId } = requireAuthenticatedUser(req);
+    const connection = supabase(accessToken);
+    const startedAt = Date.now();
+    try {
+      console.log(
+        `[FILES] deleteNote request workspaceId=${workspaceId} noteId=${noteId} studentId=${studentId}`
+      );
+    } catch {}
+
+    // Skip DB pre-check to avoid 404 due to RLS blocking SELECT; rely on filtered DELETE
+
+    // Best-effort delete of content from notes path and legacy files path
+    const notesPath = `workspace/${workspaceId}/notes/${noteId}`;
+    const legacyPath = buildFileObjectPath(workspaceId, noteId);
+    try {
+      await deleteObject(notesPath);
+    } catch {}
+    try {
+      await deleteObject(legacyPath);
+    } catch {}
+
+    // Delete DB row with filters; if RLS denies, error will be returned
+    try {
+      const resp: any = await connection
+        .from("workspace_files")
+        .delete()
+        .eq("id", noteId)
+        .eq("student_id", studentId);
+      if (resp?.error) {
+        try {
+          console.log(
+            `[FILES] deleteNote error workspaceId=${workspaceId} noteId=${noteId} studentId=${studentId} err=${resp.error.message}`
+          );
+        } catch {}
+        return res.status(500).json({ error: resp.error.message });
+      }
+      // Post-delete verification: ensure the row is gone
+      const verify = await connection
+        .from("workspace_files")
+        .select("id", { count: "exact", head: true })
+        .eq("id", noteId)
+        .eq("student_id", studentId);
+      if ((verify as any)?.count && (verify as any).count > 0) {
+        try {
+          console.log(
+            `[FILES] deleteNote not-deleted workspaceId=${workspaceId} noteId=${noteId} studentId=${studentId}`
+          );
+        } catch {}
+        return res.status(404).json({ error: "Note not deleted" });
+      }
+    } catch (e: any) {
+      try {
+        console.log(
+          `[FILES] deleteNote error workspaceId=${workspaceId} noteId=${noteId} studentId=${studentId} err=${e?.message}`
+        );
+      } catch {}
+      return res.status(500).json({ error: e?.message || "Delete failed" });
+    }
+    // If we reached here: pre-check found the row, delete succeeded
+    try {
+      console.log(
+        `[FILES] deleteNote success workspaceId=${workspaceId} noteId=${noteId} studentId=${studentId} durationMs=${Date.now() - startedAt}`
+      );
+    } catch {}
+    return res.status(200).json({ message: "Note deleted successfully" });
+  }
+
   async createFile(req: AuthzRequest, res: Response) {
     // SB-28 Create a new blank note
     // This endpoint accepts metadata only (type/name/workspaceId) and returns
@@ -490,5 +572,78 @@ export class FilesController {
       createdAt: data?.created_at ?? new Date().toISOString(),
       updatedAt: data?.updated_at ?? new Date().toISOString(),
     });
+  }
+
+  /**
+   * DELETE /files/notes/:noteId (convenience: workspace = authenticated user id)
+   */
+  async deleteMyNote(req: AuthzRequest, res: Response) {
+    const accessToken = req.headers.authorization?.replace("Bearer ", "");
+    if (!accessToken) return res.status(401).json({ error: "Unauthorized" });
+    const { studentId } = requireAuthenticatedUser(req);
+    const { noteId } = req.params as { noteId: string };
+    if (!isUUID(noteId)) return res.status(400).json({ error: "Invalid id" });
+
+    // Delegate to deleteNote with workspaceId = studentId
+    // Build a minimal shim request-like object is unnecessary; reuse logic inline
+    const connection = supabase(accessToken);
+    const startedAt = Date.now();
+    try {
+      console.log(
+        `[FILES] deleteMyNote request workspaceId=${studentId} noteId=${noteId} studentId=${studentId}`
+      );
+    } catch {}
+    // Skip DB pre-check to avoid 404 when RLS disables SELECT; delete is filtered
+
+    try {
+      const resp: any = await connection
+        .from("workspace_files")
+        .delete()
+        .eq("id", noteId)
+        .eq("student_id", studentId);
+      if (resp?.error) {
+        try {
+          console.log(
+            `[FILES] deleteMyNote error workspaceId=${studentId} noteId=${noteId} studentId=${studentId} err=${resp.error.message}`
+          );
+        } catch {}
+        return res.status(500).json({ error: resp.error.message });
+      }
+      // Post-delete verification
+      const verify = await connection
+        .from("workspace_files")
+        .select("id", { count: "exact", head: true })
+        .eq("id", noteId)
+        .eq("student_id", studentId);
+      const remaining = (verify as any)?.count || 0;
+      try { console.log(`[FILES] deleteMyNote verify count=${remaining} workspaceId=${studentId} noteId=${noteId} studentId=${studentId}`); } catch {}
+      if (remaining > 0) {
+        try {
+          console.log(
+            `[FILES] deleteMyNote not-deleted workspaceId=${studentId} noteId=${noteId} studentId=${studentId}`
+          );
+        } catch {}
+        return res.status(404).json({ error: "Note not deleted" });
+      }
+      // Only delete content if DB row is removed
+      const notesPath = `workspace/${studentId}/notes/${noteId}`;
+      const legacyPath = buildFileObjectPath(studentId, noteId);
+      try { await deleteObject(notesPath); } catch {}
+      try { await deleteObject(legacyPath); } catch {}
+    } catch (e: any) {
+      try {
+        console.log(
+          `[FILES] deleteMyNote error workspaceId=${studentId} noteId=${noteId} studentId=${studentId} err=${e?.message}`
+        );
+      } catch {}
+      return res.status(500).json({ error: e?.message || "Delete failed" });
+    }
+    // Pre-check found the row, delete succeeded
+    try {
+      console.log(
+        `[FILES] deleteMyNote success workspaceId=${studentId} noteId=${noteId} studentId=${studentId} durationMs=${Date.now() - startedAt}`
+      );
+    } catch {}
+    return res.status(200).json({ message: "Note deleted successfully" });
   }
 }

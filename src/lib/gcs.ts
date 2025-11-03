@@ -70,3 +70,20 @@ export async function writeObject(
   return metadata;
 }
 
+/**
+ * Delete an object from the configured bucket.
+ * - Returns true if the object was deleted or did not exist.
+ * - Throws only on unexpected GCS errors.
+ */
+export async function deleteObject(objectPath: string): Promise<boolean> {
+  if (!bucketName) {
+    throw new Error("GCS_BUCKET_NAME is not configured");
+  }
+  const s = getStorage();
+  const bucket = s.bucket(bucketName);
+  const file = bucket.file(objectPath);
+  const [exists] = await file.exists();
+  if (!exists) return true;
+  await file.delete({ ignoreNotFound: true });
+  return true;
+}

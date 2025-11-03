@@ -32,5 +32,11 @@ router.post(
   asyncHandler(controller.createMyNote.bind(controller))
 );
 
+router.delete(
+  "/notes/:noteId",
+  authenticateUser,
+  asyncHandler(controller.deleteMyNote.bind(controller))
+);
+
 export default router;
 

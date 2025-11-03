@@ -36,6 +36,9 @@ app.use("/files", fileRouter)
 app.use(errorHandler);
 
 if (require.main === module) {
+  try {
+    console.log(`[FILES] Supabase URL: ${process.env.SUPABASE_URL || 'unset'}`);
+  } catch {}
   app.listen(PORT, () => {
     console.log(`Files Service listening on port ${PORT}`);
   });
