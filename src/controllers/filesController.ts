@@ -555,6 +555,7 @@ export class FilesController {
 
     const { title, content } = (req.body || {}) as { title?: string; content?: string };
     const connection = supabase(accessToken);
+    logInfo("updateMyNote request", { noteId, studentId, hasTitle: typeof title === 'string', hasContent: typeof content === 'string' });
 
     // Rename when title provided
     if (typeof title === "string" && title.trim().length > 0) {
@@ -565,7 +566,10 @@ export class FilesController {
         .eq("workspace_id", studentId)
         .eq("student_id", studentId)
         .eq("type", "note");
-      if (updErr) return res.status(500).json({ error: updErr.message });
+      if (updErr) {
+        logError(updErr, "updateMyNote rename failed", { noteId, studentId });
+        return res.status(500).json({ success: false, error: updErr.message });
+      }
     }
 
     // Update content when provided
@@ -573,7 +577,8 @@ export class FilesController {
       try {
         await writeObject(`workspace/${studentId}/notes/${noteId}`, content, "text/markdown; charset=utf-8");
       } catch (e: any) {
-        return res.status(500).json({ error: e?.message || "Failed to write content" });
+        logError(e, "updateMyNote content write failed", { noteId, studentId });
+        return res.status(500).json({ success: false, error: e?.message || "Failed to write content" });
       }
     }
 
@@ -586,7 +591,11 @@ export class FilesController {
       .eq("student_id", studentId)
       .eq("type", "note")
       .single();
-    if (error || !row) return res.status(404).json({ error: "Note not found" });
+    if (error || !row) {
+      logError(error, "updateMyNote fetch failed", { noteId, studentId });
+      return res.status(404).json({ success: false, error: "Note not found" });
+    }
+    logInfo("updateMyNote success", { noteId, studentId, title: row.name });
 
     return res.status(200).json({
       id: row.id,
