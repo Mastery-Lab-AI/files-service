@@ -17,12 +17,12 @@ export class FilesController {
   async deleteNote(req: AuthzRequest, res: Response) {
     const accessToken = req.headers.authorization?.replace("Bearer ", "");
     if (!accessToken) {
-      return res.status(401).json({ error: "Unauthorized" });
+      return res.status(401).json({ success: false, error: "Unauthorized" });
     }
 
     const { workspaceId, noteId } = req.params as { workspaceId: string; noteId: string };
     if (!isUUID(workspaceId) || !isUUID(noteId)) {
-      return res.status(400).json({ error: "Invalid identifiers" });
+      return res.status(400).json({ success: false, error: "Invalid identifiers" });
     }
 
     const { studentId } = requireAuthenticatedUser(req);
@@ -32,34 +32,22 @@ export class FilesController {
 
     // Skip DB pre-check to avoid 404 due to RLS blocking SELECT; rely on filtered DELETE
 
-    // Delete DB row with RLS filters; if denied, return error
+    // Delete DB row with RLS filters; rely on error only (aligned with chat-history)
     try {
-      const resp: any = await connection
+      const { error } = await connection
         .from("workspace_files")
         .delete()
         .eq("id", noteId)
         .eq("student_id", studentId)
         .eq("workspace_id", workspaceId)
         .eq("type", "note");
-      if (resp?.error) {
-        logError(resp.error, "deleteNote error", { workspaceId, noteId, studentId });
-        return res.status(500).json({ error: resp.error.message });
-      }
-      // Post-delete verification: ensure the row is gone
-      const verify = await connection
-        .from("workspace_files")
-        .select("id", { count: "exact", head: true })
-        .eq("id", noteId)
-        .eq("student_id", studentId)
-        .eq("workspace_id", workspaceId)
-        .eq("type", "note");
-      if ((verify as any)?.count && (verify as any).count > 0) {
-        logInfo("deleteNote not-deleted", { workspaceId, noteId, studentId });
-        return res.status(404).json({ error: "Note not deleted" });
+      if (error) {
+        logError(error, "deleteNote error", { workspaceId, noteId, studentId });
+        return res.status(500).json({ success: false, error: error.message });
       }
     } catch (e: any) {
       logError(e, "deleteNote exception", { workspaceId, noteId, studentId });
-      return res.status(500).json({ error: e?.message || "Delete failed" });
+      return res.status(500).json({ success: false, error: e?.message || "Delete failed" });
     }
 
     // If DB row is removed, best-effort delete of GCS content
@@ -67,7 +55,7 @@ export class FilesController {
     try { await deleteObject(notesPath); } catch {}
     // If we reached here: pre-check found the row, delete succeeded
     logInfo("deleteNote success", { workspaceId, noteId, studentId, durationMs: Date.now() - startedAt });
-    return res.status(200).json({ message: "Note deleted successfully" });
+    return res.status(200).json({ success: true });
   }
 
   async createFile(req: AuthzRequest, res: Response) {
@@ -559,11 +547,11 @@ export class FilesController {
    */
   async updateMyNote(req: AuthzRequest, res: Response) {
     const accessToken = req.headers.authorization?.replace("Bearer ", "");
-    if (!accessToken) return res.status(401).json({ error: "Unauthorized" });
+    if (!accessToken) return res.status(401).json({ success: false, error: "Unauthorized" });
 
     const { studentId } = requireAuthenticatedUser(req);
     const { noteId } = req.params as { noteId: string };
-    if (!isUUID(noteId)) return res.status(400).json({ error: "Invalid id" });
+    if (!isUUID(noteId)) return res.status(400).json({ success: false, error: "Invalid id" });
 
     const { title, content } = (req.body || {}) as { title?: string; content?: string };
     const connection = supabase(accessToken);
@@ -621,41 +609,26 @@ export class FilesController {
     const connection = supabase(accessToken);
     const startedAt = Date.now();
     logInfo("deleteMyNote request", { workspaceId: studentId, noteId, studentId });
-    // Delete with RLS filters only
+    // Delete with RLS filters only; rely on error only
     try {
-      const resp: any = await connection
+      const { error } = await connection
         .from("workspace_files")
         .delete()
         .eq("id", noteId)
         .eq("student_id", studentId)
         .eq("workspace_id", studentId)
         .eq("type", "note");
-      if (resp?.error) {
-        logError(resp.error, "deleteMyNote error", { workspaceId: studentId, noteId, studentId });
-        return res.status(500).json({ error: resp.error.message });
+      if (error) {
+        logError(error, "deleteMyNote error", { workspaceId: studentId, noteId, studentId });
+        return res.status(500).json({ success: false, error: error.message });
       }
-      // Verify delete
-      const verify = await connection
-        .from("workspace_files")
-        .select("id", { count: "exact", head: true })
-        .eq("id", noteId)
-        .eq("student_id", studentId)
-        .eq("workspace_id", studentId)
-        .eq("type", "note");
-      const remaining = (verify as any)?.count || 0;
-      logInfo("deleteMyNote verify", { remaining, workspaceId: studentId, noteId, studentId });
-      if (remaining > 0) {
-        logInfo("deleteMyNote not-deleted", { workspaceId: studentId, noteId, studentId });
-        return res.status(404).json({ error: "Note not deleted" });
-      }
-      // Delete content
       const notesPath = `workspace/${studentId}/notes/${noteId}`;
       try { await deleteObject(notesPath); } catch {}
     } catch (e: any) {
       logError(e, "deleteMyNote exception", { workspaceId: studentId, noteId, studentId });
-      return res.status(500).json({ error: e?.message || "Delete failed" });
+      return res.status(500).json({ success: false, error: e?.message || "Delete failed" });
     }
     logInfo("deleteMyNote success", { workspaceId: studentId, noteId, studentId, durationMs: Date.now() - startedAt });
-    return res.status(200).json({ message: "Note deleted successfully" });
+    return res.status(200).json({ success: true });
   }
 }

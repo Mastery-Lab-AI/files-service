@@ -72,7 +72,7 @@ describe("DELETE /workspace/:workspaceId/notes/:noteId", () => {
       .set("Authorization", "Bearer valid");
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ message: "Note deleted successfully" });
+    expect(res.body).toEqual({ success: true });
     expect(from).toHaveBeenCalledWith("workspace_files");
     expect(deleteObject).toHaveBeenCalledWith(`workspace/${workspaceId}/notes/${noteId}`);
   });
@@ -93,12 +93,14 @@ describe("DELETE /workspace/:workspaceId/notes/:noteId", () => {
       .set("Authorization", "Bearer valid");
 
     expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true });
   });
 
   it("returns 401 when missing auth header", async () => {
     const res = await request(app)
       .delete(`/workspace/${workspaceId}/notes/${noteId}`);
     expect(res.status).toBe(401);
+    expect(res.body).toEqual({ success: false, error: expect.any(String) });
   });
 });
 
@@ -137,6 +139,7 @@ describe("DELETE /files/notes/:noteId (my workspace)", () => {
       .set("Authorization", "Bearer valid");
 
     expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true });
     expect(deleteObject).toHaveBeenCalledWith(`workspace/u1/notes/${noteId}`);
   });
 });

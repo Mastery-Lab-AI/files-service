@@ -18,7 +18,7 @@ export async function authenticateUser(
 
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized" });
+      return res.status(401).json({ success: false, error: "Unauthorized" });
     }
 
     const token = authHeader.replace("Bearer ", "");
@@ -29,7 +29,7 @@ export async function authenticateUser(
     } = await supabaseAnon.auth.getUser(token);
 
     if (error || !user) {
-      return res.status(401).json({ error: "Unauthorized" });
+      return res.status(401).json({ success: false, error: "Unauthorized" });
     }
 
     const studentId = user.id;
@@ -40,6 +40,6 @@ export async function authenticateUser(
 
     return next();
   } catch (_e) {
-    return res.status(500).json({ error: "Authentication failed" });
+    return res.status(500).json({ success: false, error: "Authentication failed" });
   }
 }

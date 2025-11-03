@@ -99,7 +99,7 @@ app.use(WORKSPACE_PREFIX, workspaceRouter);
 app.use(FILES_PREFIX, fileRouter);
 
 // 404 JSON handler
-app.use((req, res) => res.status(404).json({ error: "Not Found" }));
+app.use((req, res) => res.status(404).json({ success: false, error: "Not Found" }));
 
 // Error handler must be last
 app.use(errorHandler);
