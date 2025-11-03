@@ -40,4 +40,12 @@ router.put(
   asyncHandler(controller.putNoteContent.bind(controller))
 );
 
+// DELETE /workspace/:workspaceId/notes/:noteId
+// Delete a note (DB row + content) the authenticated user owns in a workspace
+router.delete(
+  "/:workspaceId/notes/:noteId",
+  authenticateUser,
+  asyncHandler(controller.deleteNote.bind(controller))
+);
+
 export default router;

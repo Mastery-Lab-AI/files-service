@@ -14,5 +14,5 @@ export const errorHandler = (
 ) => {
   const status = typeof error?.status === 'number' ? error.status : 500;
   const message = error?.message || 'Internal Server Error';
-  res.status(status).json({ error: message });
+  res.status(status).json({ success: false, error: message });
 };
