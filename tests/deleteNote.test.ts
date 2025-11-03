@@ -75,7 +75,6 @@ describe("DELETE /workspace/:workspaceId/notes/:noteId", () => {
     expect(res.body).toEqual({ message: "Note deleted successfully" });
     expect(from).toHaveBeenCalledWith("workspace_files");
     expect(deleteObject).toHaveBeenCalledWith(`workspace/${workspaceId}/notes/${noteId}`);
-    expect(deleteObject).toHaveBeenCalledWith(`workspace/${workspaceId}/files/${noteId}`);
   });
 
   it("returns 200 when note may not exist (no-op)", async () => {
@@ -139,7 +138,6 @@ describe("DELETE /files/notes/:noteId (my workspace)", () => {
 
     expect(res.status).toBe(200);
     expect(deleteObject).toHaveBeenCalledWith(`workspace/u1/notes/${noteId}`);
-    expect(deleteObject).toHaveBeenCalledWith(`workspace/u1/files/${noteId}`);
   });
 });
 

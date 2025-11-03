@@ -79,9 +79,7 @@ export class FilesController {
 
     // If DB row is removed, best-effort delete of GCS content
     const notesPath = `workspace/${workspaceId}/notes/${noteId}`;
-    const legacyPath = buildFileObjectPath(workspaceId, noteId);
     try { await deleteObject(notesPath); } catch {}
-    try { await deleteObject(legacyPath); } catch {}
     // If we reached here: pre-check found the row, delete succeeded
     try {
       console.log(
@@ -683,9 +681,7 @@ export class FilesController {
       }
       // Delete content
       const notesPath = `workspace/${studentId}/notes/${noteId}`;
-      const legacyPath = buildFileObjectPath(studentId, noteId);
       try { await deleteObject(notesPath); } catch {}
-      try { await deleteObject(legacyPath); } catch {}
     } catch (e: any) {
       try {
         console.log(
