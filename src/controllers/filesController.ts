@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { supabase } from "../lib/supabase";
 import { buildFileObjectPath, readObject, writeObject, deleteObject } from "../lib/gcs";
+import { logInfo, logError } from "../utils/logger";
 import { parsePagination, toRange, buildPageMeta } from "../utils/pagination";
 import { isAllowedFileType, isUUID } from "../utils/validation";
 import { buildContentRef, toFileListItem } from "../mappers/fileMapper";
@@ -27,11 +28,7 @@ export class FilesController {
     const { studentId } = requireAuthenticatedUser(req);
     const connection = supabase(accessToken);
     const startedAt = Date.now();
-    try {
-      console.log(
-        `[FILES] deleteNote request workspaceId=${workspaceId} noteId=${noteId} studentId=${studentId}`
-      );
-    } catch {}
+    logInfo("deleteNote request", { workspaceId, noteId, studentId });
 
     // Skip DB pre-check to avoid 404 due to RLS blocking SELECT; rely on filtered DELETE
 
@@ -45,11 +42,7 @@ export class FilesController {
         .eq("workspace_id", workspaceId)
         .eq("type", "note");
       if (resp?.error) {
-        try {
-          console.log(
-            `[FILES] deleteNote error workspaceId=${workspaceId} noteId=${noteId} studentId=${studentId} err=${resp.error.message}`
-          );
-        } catch {}
+        logError(resp.error, "deleteNote error", { workspaceId, noteId, studentId });
         return res.status(500).json({ error: resp.error.message });
       }
       // Post-delete verification: ensure the row is gone
@@ -61,19 +54,11 @@ export class FilesController {
         .eq("workspace_id", workspaceId)
         .eq("type", "note");
       if ((verify as any)?.count && (verify as any).count > 0) {
-        try {
-          console.log(
-            `[FILES] deleteNote not-deleted workspaceId=${workspaceId} noteId=${noteId} studentId=${studentId}`
-          );
-        } catch {}
+        logInfo("deleteNote not-deleted", { workspaceId, noteId, studentId });
         return res.status(404).json({ error: "Note not deleted" });
       }
     } catch (e: any) {
-      try {
-        console.log(
-          `[FILES] deleteNote error workspaceId=${workspaceId} noteId=${noteId} studentId=${studentId} err=${e?.message}`
-        );
-      } catch {}
+      logError(e, "deleteNote exception", { workspaceId, noteId, studentId });
       return res.status(500).json({ error: e?.message || "Delete failed" });
     }
 
@@ -81,11 +66,7 @@ export class FilesController {
     const notesPath = `workspace/${workspaceId}/notes/${noteId}`;
     try { await deleteObject(notesPath); } catch {}
     // If we reached here: pre-check found the row, delete succeeded
-    try {
-      console.log(
-        `[FILES] deleteNote success workspaceId=${workspaceId} noteId=${noteId} studentId=${studentId} durationMs=${Date.now() - startedAt}`
-      );
-    } catch {}
+    logInfo("deleteNote success", { workspaceId, noteId, studentId, durationMs: Date.now() - startedAt });
     return res.status(200).json({ message: "Note deleted successfully" });
   }
 
@@ -639,11 +620,7 @@ export class FilesController {
     // WorkspaceId equals studentId for convenience routes
     const connection = supabase(accessToken);
     const startedAt = Date.now();
-    try {
-      console.log(
-        `[FILES] deleteMyNote request workspaceId=${studentId} noteId=${noteId} studentId=${studentId}`
-      );
-    } catch {}
+    logInfo("deleteMyNote request", { workspaceId: studentId, noteId, studentId });
     // Delete with RLS filters only
     try {
       const resp: any = await connection
@@ -654,11 +631,7 @@ export class FilesController {
         .eq("workspace_id", studentId)
         .eq("type", "note");
       if (resp?.error) {
-        try {
-          console.log(
-            `[FILES] deleteMyNote error workspaceId=${studentId} noteId=${noteId} studentId=${studentId} err=${resp.error.message}`
-          );
-        } catch {}
+        logError(resp.error, "deleteMyNote error", { workspaceId: studentId, noteId, studentId });
         return res.status(500).json({ error: resp.error.message });
       }
       // Verify delete
@@ -670,31 +643,19 @@ export class FilesController {
         .eq("workspace_id", studentId)
         .eq("type", "note");
       const remaining = (verify as any)?.count || 0;
-      try { console.log(`[FILES] deleteMyNote verify count=${remaining} workspaceId=${studentId} noteId=${noteId} studentId=${studentId}`); } catch {}
+      logInfo("deleteMyNote verify", { remaining, workspaceId: studentId, noteId, studentId });
       if (remaining > 0) {
-        try {
-          console.log(
-            `[FILES] deleteMyNote not-deleted workspaceId=${studentId} noteId=${noteId} studentId=${studentId}`
-          );
-        } catch {}
+        logInfo("deleteMyNote not-deleted", { workspaceId: studentId, noteId, studentId });
         return res.status(404).json({ error: "Note not deleted" });
       }
       // Delete content
       const notesPath = `workspace/${studentId}/notes/${noteId}`;
       try { await deleteObject(notesPath); } catch {}
     } catch (e: any) {
-      try {
-        console.log(
-          `[FILES] deleteMyNote error workspaceId=${studentId} noteId=${noteId} studentId=${studentId} err=${e?.message}`
-        );
-      } catch {}
+      logError(e, "deleteMyNote exception", { workspaceId: studentId, noteId, studentId });
       return res.status(500).json({ error: e?.message || "Delete failed" });
     }
-    try {
-      console.log(
-        `[FILES] deleteMyNote success workspaceId=${studentId} noteId=${noteId} studentId=${studentId} durationMs=${Date.now() - startedAt}`
-      );
-    } catch {}
+    logInfo("deleteMyNote success", { workspaceId: studentId, noteId, studentId, durationMs: Date.now() - startedAt });
     return res.status(200).json({ message: "Note deleted successfully" });
   }
 }
