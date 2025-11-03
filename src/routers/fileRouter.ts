@@ -32,6 +32,18 @@ router.post(
   asyncHandler(controller.createMyNote.bind(controller))
 );
 
+// Update my note (rename and/or content)
+router.patch(
+  "/notes/:noteId",
+  authenticateUser,
+  asyncHandler(controller.updateMyNote.bind(controller))
+);
+router.put(
+  "/notes/:noteId",
+  authenticateUser,
+  asyncHandler(controller.updateMyNote.bind(controller))
+);
+
 router.delete(
   "/notes/:noteId",
   authenticateUser,

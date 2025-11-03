@@ -575,6 +575,60 @@ export class FilesController {
   }
 
   /**
+   * PATCH/PUT /files/notes/:noteId (convenience: workspace = authenticated user id)
+   * Allows renaming the note (title/name) and/or updating content.
+   */
+  async updateMyNote(req: AuthzRequest, res: Response) {
+    const accessToken = req.headers.authorization?.replace("Bearer ", "");
+    if (!accessToken) return res.status(401).json({ error: "Unauthorized" });
+
+    const { studentId } = requireAuthenticatedUser(req);
+    const { noteId } = req.params as { noteId: string };
+    if (!isUUID(noteId)) return res.status(400).json({ error: "Invalid id" });
+
+    const { title, content } = (req.body || {}) as { title?: string; content?: string };
+    const connection = supabase(accessToken);
+
+    // Rename when title provided
+    if (typeof title === "string" && title.trim().length > 0) {
+      const { error: updErr } = await connection
+        .from("workspace_files")
+        .update({ name: title.trim() })
+        .eq("id", noteId)
+        .eq("workspace_id", studentId)
+        .eq("student_id", studentId)
+        .eq("type", "note");
+      if (updErr) return res.status(500).json({ error: updErr.message });
+    }
+
+    // Update content when provided
+    if (typeof content === "string") {
+      try {
+        await writeObject(`workspace/${studentId}/notes/${noteId}`, content, "text/markdown; charset=utf-8");
+      } catch (e: any) {
+        return res.status(500).json({ error: e?.message || "Failed to write content" });
+      }
+    }
+
+    // Return updated record
+    const { data: row, error } = await connection
+      .from("workspace_files")
+      .select("*")
+      .eq("id", noteId)
+      .eq("workspace_id", studentId)
+      .eq("student_id", studentId)
+      .eq("type", "note")
+      .single();
+    if (error || !row) return res.status(404).json({ error: "Note not found" });
+
+    return res.status(200).json({
+      id: row.id,
+      title: row.name,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    });
+  }
+  /**
    * DELETE /files/notes/:noteId (convenience: workspace = authenticated user id)
    */
   async deleteMyNote(req: AuthzRequest, res: Response) {
