@@ -51,7 +51,9 @@ export class FilesController {
         .from("workspace_files")
         .delete()
         .eq("id", noteId)
-        .eq("student_id", studentId);
+        .eq("student_id", studentId)
+        .eq("workspace_id", workspaceId)
+        .eq("type", "note");
       if (resp?.error) {
         try {
           console.log(
@@ -65,7 +67,9 @@ export class FilesController {
         .from("workspace_files")
         .select("id", { count: "exact", head: true })
         .eq("id", noteId)
-        .eq("student_id", studentId);
+        .eq("student_id", studentId)
+        .eq("workspace_id", workspaceId)
+        .eq("type", "note");
       if ((verify as any)?.count && (verify as any).count > 0) {
         try {
           console.log(
@@ -654,7 +658,9 @@ export class FilesController {
         .from("workspace_files")
         .delete()
         .eq("id", noteId)
-        .eq("student_id", studentId);
+        .eq("student_id", studentId)
+        .eq("workspace_id", studentId)
+        .eq("type", "note");
       if (resp?.error) {
         try {
           console.log(
@@ -668,7 +674,9 @@ export class FilesController {
         .from("workspace_files")
         .select("id", { count: "exact", head: true })
         .eq("id", noteId)
-        .eq("student_id", studentId);
+        .eq("student_id", studentId)
+        .eq("workspace_id", studentId)
+        .eq("type", "note");
       const remaining = (verify as any)?.count || 0;
       try { console.log(`[FILES] deleteMyNote verify count=${remaining} workspaceId=${studentId} noteId=${noteId} studentId=${studentId}`); } catch {}
       if (remaining > 0) {

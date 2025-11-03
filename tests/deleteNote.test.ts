@@ -26,9 +26,13 @@ function buildDeleteChain(noteId: string) {
   const eq3 = { eq: jest.fn().mockReturnValue(eq4) } as any;
   const eq2 = { eq: jest.fn().mockReturnValue(eq3) } as any;
   const eq1 = { eq: jest.fn().mockReturnValue(eq2) } as any;
-  const selEq2: any = { eq: jest.fn().mockReturnValue({ count: 0 }) };
-  const selEq1: any = { eq: jest.fn().mockReturnValue(selEq2) };
-  const select = jest.fn().mockReturnValue(selEq1);
+  // Make the select chain tolerant to multiple .eq() calls and expose count
+  const selectChain: any = {
+    select: jest.fn().mockReturnThis(),
+    eq: jest.fn().mockReturnThis(),
+    count: 0,
+  };
+  const select = jest.fn().mockReturnValue(selectChain);
   return { delete: jest.fn().mockReturnValue(eq1), select } as any;
 }
 
