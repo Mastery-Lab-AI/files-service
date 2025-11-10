@@ -5,6 +5,14 @@ import { asyncHandler } from "../errorHandler";
 
 const router = express.Router();
 const controller = new FilesController();
+// Helper: accept raw bodies for non-JSON content types (e.g., text/markdown, application/pdf)
+const rawUnlessJson = express.raw({
+  type: (req) => {
+    const ct = req.headers['content-type'] || '';
+    return !ct.includes('application/json');
+  },
+  limit: '20mb',
+});
 
 // GET /workspace/:workspaceId/files?type=note|whiteboard|graph
 router.get(
@@ -18,6 +26,23 @@ router.get(
   "/:workspaceId/files/:fileId/content",
   authenticateUser,
   asyncHandler(controller.getFileContent.bind(controller))
+);
+
+// PUT /workspace/:workspaceId/files/:fileId/content
+// Upload/replace content for any file type.
+router.put(
+  "/:workspaceId/files/:fileId/content",
+  express.raw({ type: '*/*', limit: '20mb' }),
+  authenticateUser,
+  asyncHandler(controller.putFileContent.bind(controller))
+);
+
+// PUT /workspace/:workspaceId/files/:fileId/content
+// Upload/replace content for any file type.
+router.put(
+  "/:workspaceId/files/:fileId/content",
+  authenticateUser,
+  asyncHandler(controller.putFileContent.bind(controller))
 );
 
 // GET /workspace/:workspaceId/notes/:noteId/content
@@ -36,6 +61,7 @@ router.get(
 // - Writes JSON (or raw body) to GCS at workspace/<ws>/notes/<id>.
 router.put(
   "/:workspaceId/notes/:noteId/content",
+  rawUnlessJson,
   authenticateUser,
   asyncHandler(controller.putNoteContent.bind(controller))
 );
@@ -46,6 +72,48 @@ router.delete(
   "/:workspaceId/notes/:noteId",
   authenticateUser,
   asyncHandler(controller.deleteNote.bind(controller))
+);
+
+// POST /workspace/:workspaceId/files (create any file type in workspace)
+router.post(
+  "/:workspaceId/files",
+  authenticateUser,
+  asyncHandler(controller.createFileInWorkspace.bind(controller))
+);
+
+// PATCH /workspace/:workspaceId/files/:fileId (rename/metadata)
+router.patch(
+  "/:workspaceId/files/:fileId",
+  authenticateUser,
+  asyncHandler(controller.updateFile.bind(controller))
+);
+
+// DELETE /workspace/:workspaceId/files/:fileId (generic deletion)
+router.delete(
+  "/:workspaceId/files/:fileId",
+  authenticateUser,
+  asyncHandler(controller.deleteFile.bind(controller))
+);
+
+// POST /workspace/:workspaceId/files (create any file type in workspace)
+router.post(
+  "/:workspaceId/files",
+  authenticateUser,
+  asyncHandler(controller.createFileInWorkspace.bind(controller))
+);
+
+// PATCH /workspace/:workspaceId/files/:fileId (rename/metadata)
+router.patch(
+  "/:workspaceId/files/:fileId",
+  authenticateUser,
+  asyncHandler(controller.updateFile.bind(controller))
+);
+
+// DELETE /workspace/:workspaceId/files/:fileId (generic deletion)
+router.delete(
+  "/:workspaceId/files/:fileId",
+  authenticateUser,
+  asyncHandler(controller.deleteFile.bind(controller))
 );
 
 export default router;

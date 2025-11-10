@@ -113,7 +113,7 @@ export class FilesController {
 
     if (!error && data) {
       // Emit canonical record from DB (timestamps from DB), including a
-      // type-aware contentRef (notes → /notes/:id/content).
+      // type-aware contentRef (notes â†’ /notes/:id/content).
       const file = {
         id: data.id,
         type: data.type,
@@ -279,6 +279,56 @@ export class FilesController {
   }
 
   /**
+   * PUT /workspace/:workspaceId/files/:fileId/content
+   * Upload/replace content for any file type the user owns in a workspace.
+   */
+  async putFileContent(req: AuthzRequest, res: Response) {
+    const accessToken = req.headers.authorization?.replace("Bearer ", "");
+    if (!accessToken) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { workspaceId, fileId } = req.params as { workspaceId: string; fileId: string };
+    if (!isUUID(workspaceId) || !isUUID(fileId)) {
+      return res.status(400).json({ error: "Invalid identifiers" });
+    }
+
+    const { studentId } = requireAuthenticatedUser(req);
+    const connection = supabase(accessToken);
+
+    // Verify file exists and belongs to this user in this workspace
+    const { data: file, error } = await connection
+      .from("workspace_files")
+      .select("*")
+      .eq("id", fileId)
+      .eq("workspace_id", workspaceId)
+      .eq("student_id", studentId)
+      .single();
+    if (error || !file) {
+      return res.status(404).json({ error: "File not found" });
+    }
+
+    const ctype = req.headers["content-type"];
+    const contentType = Array.isArray(ctype) ? ctype[0] : String(ctype || "application/octet-stream");
+    let data: Buffer | string;
+    if (typeof req.body === "object" && !Buffer.isBuffer(req.body)) {
+      try { data = JSON.stringify(req.body); } catch { return res.status(400).json({ error: "Invalid JSON body" }); }
+    } else if (typeof req.body === "string" || Buffer.isBuffer(req.body)) {
+      data = req.body as any;
+    } else {
+      return res.status(400).json({ error: "Unsupported body" });
+    }
+
+    const filesPath = buildFileObjectPath(workspaceId, fileId);
+    try {
+      await writeObject(filesPath, data, contentType);
+      return res.status(204).send();
+    } catch (e: any) {
+      return res.status(500).json({ error: e?.message || "Failed to write content" });
+    }
+  }
+
+  /**
    * GET /workspace/:workspaceId/notes/:noteId/content
    * Fetch note content with strict type and ownership enforcement.
    * - Validates UUIDs, requires auth.
@@ -404,6 +454,115 @@ export class FilesController {
     } catch (e: any) {
       return res.status(500).json({ error: e?.message || "Failed to write content" });
     }
+  }
+
+  /**
+   * POST /workspace/:workspaceId/files
+   * Create a file (any allowed type) in a workspace; returns canonical record + contentRef.
+   */
+  async createFileInWorkspace(req: AuthzRequest, res: Response) {
+    const accessToken = req.headers.authorization?.replace("Bearer ", "");
+    if (!accessToken) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const { workspaceId } = req.params as { workspaceId: string };
+    const { name, type } = (req.body || {}) as { name?: string; type?: string };
+    if (!isUUID(workspaceId)) return res.status(400).json({ error: "Invalid workspaceId" });
+    if (typeof name !== "string" || name.trim().length === 0) return res.status(400).json({ error: "Invalid name" });
+    if (!isAllowedFileType(type)) return res.status(400).json({ error: "Invalid type" });
+
+    const { studentId } = requireAuthenticatedUser(req);
+    const connection = supabase(accessToken);
+    const id = crypto.randomUUID();
+    const insertPayload = { id, workspace_id: workspaceId, student_id: studentId, type, name: name.trim() } as const;
+    const { data, error } = await connection.from("workspace_files").insert([insertPayload]).select().single();
+    if (!error && data) {
+      return res.status(201).json({
+        id: data.id,
+        type: data.type,
+        studentId: data.student_id,
+        workspaceId: data.workspace_id,
+        name: data.name,
+        contentRef: buildContentRef(data.workspace_id, data.id, data.type),
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+      });
+    }
+    const now = new Date().toISOString();
+    return res.status(201).json({
+      id,
+      type,
+      studentId,
+      workspaceId,
+      name,
+      contentRef: buildContentRef(workspaceId, id, type),
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  /**
+   * PATCH /workspace/:workspaceId/files/:fileId
+   * Rename/update metadata for any file; returns updated record.
+   */
+  async updateFile(req: AuthzRequest, res: Response) {
+    const accessToken = req.headers.authorization?.replace("Bearer ", "");
+    if (!accessToken) return res.status(401).json({ error: "Unauthorized" });
+    const { workspaceId, fileId } = req.params as { workspaceId: string; fileId: string };
+    if (!isUUID(workspaceId) || !isUUID(fileId)) return res.status(400).json({ error: "Invalid identifiers" });
+    const { name } = (req.body || {}) as { name?: string };
+    const { studentId } = requireAuthenticatedUser(req);
+    const connection = supabase(accessToken);
+
+    if (typeof name === 'string' && name.trim().length > 0) {
+      const { error: updErr } = await connection
+        .from('workspace_files')
+        .update({ name: name.trim() })
+        .eq('id', fileId)
+        .eq('workspace_id', workspaceId)
+        .eq('student_id', studentId);
+      if (updErr) return res.status(500).json({ error: updErr.message });
+    }
+
+    const { data: row, error } = await connection
+      .from('workspace_files')
+      .select('*')
+      .eq('id', fileId)
+      .eq('workspace_id', workspaceId)
+      .eq('student_id', studentId)
+      .single();
+    if (error || !row) return res.status(404).json({ error: 'File not found' });
+
+    return res.status(200).json(toFileListItem(row));
+  }
+
+  /**
+   * DELETE /workspace/:workspaceId/files/:fileId
+   * Delete DB row + best-effort delete of content (notes and files paths)
+   */
+  async deleteFile(req: AuthzRequest, res: Response) {
+    const accessToken = req.headers.authorization?.replace("Bearer ", "");
+    if (!accessToken) return res.status(401).json({ error: "Unauthorized" });
+    const { workspaceId, fileId } = req.params as { workspaceId: string; fileId: string };
+    if (!isUUID(workspaceId) || !isUUID(fileId)) return res.status(400).json({ error: "Invalid identifiers" });
+    const { studentId } = requireAuthenticatedUser(req);
+    const connection = supabase(accessToken);
+
+    try {
+      const { error } = await connection
+        .from('workspace_files')
+        .delete()
+        .eq('id', fileId)
+        .eq('workspace_id', workspaceId)
+        .eq('student_id', studentId);
+      if (error) return res.status(500).json({ error: error.message });
+    } catch (e: any) {
+      return res.status(500).json({ error: e?.message || 'Delete failed' });
+    }
+
+    try { await deleteObject(`workspace/${workspaceId}/notes/${fileId}`); } catch {}
+    try { await deleteObject(buildFileObjectPath(workspaceId, fileId)); } catch {}
+    return res.status(200).json({ success: true });
   }
 
   /**
