@@ -1,4 +1,4 @@
-export const FILE_TYPES = ["note", "whiteboard", "graph"] as const;
+export const FILE_TYPES = ["note", "whiteboard", "graph", "document"] as const;
 export type FileType = typeof FILE_TYPES[number];
 
 export function isUUID(v?: string): v is string {
