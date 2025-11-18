@@ -1,0 +1,28 @@
+name: Node.js CI
+
+on:
+    push:
+      branches: [ "main", "tests" ]
+    pull_request:
+      branches: [ "main", "tests" ]
+
+jobs:
+    build:
+      runs-on: ubuntu-latest
+
+      strategy:
+        matrix:
+          node-version: [25.x]  # Match your package.json engines
+
+      steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - run: npm ci
+      - run: npm run build
+      - run: npm test -- --forceExit
