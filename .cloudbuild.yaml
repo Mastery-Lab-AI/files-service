@@ -3,12 +3,21 @@
 # ----------------------------------------------------------------------
 steps:
 - name: 'bash'
-  id: Clean-Version
+  id: Clean-Tag-Name
   entrypoint: 'bash'
   args: 
     - '-c'
-    # This command converts 'v1.2.3' to 'v1-2-3'
-    - 'CLEAN_VERSION=$(echo "$TAG_NAME" | tr "." "-"); echo "CLEAN_VERSION=$CLEAN_VERSION" >> $BUILD_ENV'
+    # 1. Substitute dots with hyphens to satisfy Cloud Run naming rules.
+    # 2. Assign the cleaned version to a variable called 'CLEAN_TAG_NAME'.
+    # 3. Print the variable as a key=value pair to the designated environment file ($BUILD_ENV).
+    - |
+      TAG="$TAG_NAME"
+      CLEAN_TAG_NAME=$(echo "$TAG" | tr "." "-")
+      echo "REVISION_NAME_SUFFIX=$CLEAN_TAG_NAME" >> $BUILD_ENV
+      echo "Generated revision name suffix: $CLEAN_TAG_NAME"
+  env:
+    # Ensure the required environment variable is available within this step
+    - 'TAG_NAME=${TAG_NAME}'
 
 - name: 'gcr.io/cloud-builders/docker'
   id: Docker-Build
