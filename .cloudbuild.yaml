@@ -12,9 +12,9 @@ steps:
     # 3. Print the variable as a key=value pair to the designated environment file ($BUILD_ENV).
     - |
       _TAG="$TAG_NAME"
-      CLEAN_TAG_NAME=$(echo "$_TAG" | tr "." "-")
-      echo "REVISION_NAME_SUFFIX=$CLEAN_TAG_NAME" >> $BUILD_ENV
-      echo "Generated revision name suffix: $CLEAN_TAG_NAME"
+      _CLEAN_TAG_NAME=$(echo "$_TAG" | tr "." "-")
+      echo "REVISION_NAME_SUFFIX=$_CLEAN_TAG_NAME" >> $BUILD_ENV
+      echo "Generated revision name suffix: $_CLEAN_TAG_NAME"
   env:
     # Ensure the required environment variable is available within this step
     - 'TAG_NAME=${TAG_NAME}'
@@ -50,7 +50,7 @@ steps:
     - '--platform'
     - 'managed'
     - '--revision-suffix'
-    - '$CLEAN_VERSION'
+    - '$_CLEAN_VERSION'
 
 images:
 - 'gcr.io/$PROJECT_ID/file-service:$TAG_NAME'
