@@ -2,6 +2,14 @@
 # cloudbuild.yaml for TypeScript/Node.js Docker Build
 # ----------------------------------------------------------------------
 steps:
+- name: 'bash'
+  id: Clean-Version
+  entrypoint: 'bash'
+  args: 
+    - '-c'
+    # This command converts 'v1.2.3' to 'v1-2-3'
+    - 'CLEAN_VERSION=$(echo "$TAG_NAME" | tr "." "-"); echo "CLEAN_VERSION=$CLEAN_VERSION" >> $BUILD_ENV'
+
 - name: 'gcr.io/cloud-builders/docker'
   id: Docker-Build
   args: 
@@ -33,7 +41,7 @@ steps:
     - '--platform'
     - 'managed'
     - '--revision-suffix'
-    - '$TAG_NAME'
+    - '$CLEAN_VERSION'
 
 # ----------------------------------------------------------------------
 # Top-level fields
