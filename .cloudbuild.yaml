@@ -2,23 +2,6 @@
 # cloudbuild.yaml for TypeScript/Node.js Docker Build
 # ----------------------------------------------------------------------
 steps:
-- name: 'bash'
-  id: Clean-Tag-Name
-  entrypoint: 'bash'
-  args: 
-    - '-c'
-    # 1. Substitute dots with hyphens to satisfy Cloud Run naming rules.
-    # 2. Assign the cleaned version to a variable called 'CLEAN_TAG_NAME'.
-    # 3. Print the variable as a key=value pair to the designated environment file ($BUILD_ENV).
-    - |
-      _TAG="$TAG_NAME"
-      _CLEAN_TAG_NAME=$(echo "$_TAG" | tr "." "-")
-      echo "REVISION_NAME_SUFFIX=$_CLEAN_TAG_NAME" >> $BUILD_ENV
-      echo "Generated revision name suffix: $_CLEAN_TAG_NAME"
-  env:
-    # Ensure the required environment variable is available within this step
-    - 'TAG_NAME=${TAG_NAME}'
-
 - name: 'gcr.io/cloud-builders/docker'
   id: Docker-Build
   args: 
@@ -50,7 +33,7 @@ steps:
     - '--platform'
     - 'managed'
     - '--revision-suffix'
-    - '$_CLEAN_VERSION'
+    - '${TAG_NAME//./-}'
 
 images:
 - 'gcr.io/$PROJECT_ID/file-service:$TAG_NAME'
