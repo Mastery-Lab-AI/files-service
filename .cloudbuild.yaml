@@ -11,8 +11,8 @@ steps:
     # 2. Assign the cleaned version to a variable called 'CLEAN_TAG_NAME'.
     # 3. Print the variable as a key=value pair to the designated environment file ($BUILD_ENV).
     - |
-      TAG="$TAG_NAME"
-      CLEAN_TAG_NAME=$(echo "$TAG" | tr "." "-")
+      _TAG="$TAG_NAME"
+      CLEAN_TAG_NAME=$(echo "$_TAG" | tr "." "-")
       echo "REVISION_NAME_SUFFIX=$CLEAN_TAG_NAME" >> $BUILD_ENV
       echo "Generated revision name suffix: $CLEAN_TAG_NAME"
   env:
@@ -52,15 +52,10 @@ steps:
     - '--revision-suffix'
     - '$CLEAN_VERSION'
 
-# ----------------------------------------------------------------------
-# Top-level fields
-# ----------------------------------------------------------------------
 images:
-# All images produced by the build must be listed here
 - 'gcr.io/$PROJECT_ID/file-service:$TAG_NAME'
 - 'gcr.io/$PROJECT_ID/file-service:latest'
 
-# OPTIONAL: Define configuration options if needed (e.g., logging fix)
 options:
   # If you are using a custom service account, include one of these:
   logging: CLOUD_LOGGING_ONLY 
