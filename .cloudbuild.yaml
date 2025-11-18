@@ -1,0 +1,49 @@
+# ----------------------------------------------------------------------
+# cloudbuild.yaml for TypeScript/Node.js Docker Build
+# ----------------------------------------------------------------------
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  id: Docker-Build
+  args: 
+    - 'build'
+    - '-t'
+    - 'gcr.io/$PROJECT_ID/file-service:$TAG_NAME'
+    - '-t'
+    - 'gcr.io/$PROJECT_ID/file-service:latest' # Tag the image as 'latest' as well
+    - '.'
+    
+- name: 'gcr.io/cloud-builders/docker'
+  id: Docker-Push
+  args: 
+    - 'push'
+    - 'gcr.io/$PROJECT_ID/file-service:$TAG_NAME'
+
+# 6. Deploy the Image (Optional)
+# Example of deploying to Cloud Run (replace with your service name)
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: Deploy
+  args:
+    - 'run'
+    - 'deploy'
+    - 'file-service-ux'
+    - '--image'
+    - 'gcr.io/$PROJECT_ID/file-service:$TAG_NAME'
+    - '--region'
+    - 'northamerica-northeast2'
+    - '--platform'
+    - 'managed'
+
+# ----------------------------------------------------------------------
+# Top-level fields
+# ----------------------------------------------------------------------
+images:
+# All images produced by the build must be listed here
+- 'gcr.io/$PROJECT_ID/file-service:$TAG_NAME'
+- 'gcr.io/$PROJECT_ID/file-service:latest'
+
+# OPTIONAL: Define configuration options if needed (e.g., logging fix)
+options:
+  # If you are using a custom service account, include one of these:
+  logging: CLOUD_LOGGING_ONLY 
+  # default_logs_bucket_behavior: REGIONAL_USER_OWNED_BUCKET
+  diskSizeGb: '100' # Increase disk space if you have many dependencies or a large project
