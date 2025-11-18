@@ -1,0 +1,57 @@
+name: Automatic Release and Tagging
+
+# 1. When to run the workflow
+on:
+  push:
+    branches:
+      - main # Trigger when a push occurs on the main branch
+    # Only run if the push is from a merge commit (standard PR merge)
+    # This prevents running on direct pushes to main if you don't allow them
+    # and only runs *after* the PR merge is complete.
+    # Note: You can comment this out if you prefer to run on ALL pushes to main.
+    # if: github.event_name == 'push' && contains(github.event.head_commit.message, 'Merge pull request') 
+
+# 2. Define the jobs
+jobs:
+  release:
+    # Use the latest stable Ubuntu runner
+    runs-on: ubuntu-latest
+    
+    # Check out the code
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        # CRITICAL: We need full history and the token to push back changes.
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '25'
+
+      - name: Install dependencies
+        # This is often needed, even just for 'npm version' to work correctly
+        run: npm install
+
+      - name: ⚙️ Increment Version, Commit, and Tag
+        run: |
+          # Configure Git to use the GitHub Actions bot user
+          git config user.name github-actions[bot]
+          git config user.email github-actions[bot]@users.noreply.github.com
+          
+          # Increment the version (patch by default), commit the change, and create the tag
+          # Use 'minor' or 'major' instead of 'patch' for a different increment.
+          npm version patch -m "Release version %s"
+          
+          # Get the new tag name (e.g., 'v1.0.1')
+          NEW_TAG=$(git describe --tags --abbrev=0)
+          
+          echo "New tag created: $NEW_TAG"
+
+      - name: ⬆️ Push new commit and tag
+        run: |
+          # Push the committed package.json change AND the new tag to origin
+          git push
+          git push --tags
