@@ -32,8 +32,6 @@ steps:
     - 'northamerica-northeast2'
     - '--platform'
     - 'managed'
-    - '--revision-suffix'
-    - '${TAG_NAME//./-}'
 
 images:
 - 'gcr.io/$PROJECT_ID/file-service:$TAG_NAME'
