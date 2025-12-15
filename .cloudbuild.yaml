@@ -7,35 +7,20 @@ steps:
   args: 
     - 'build'
     - '-t'
-    - 'gcr.io/$PROJECT_ID/file-service:$TAG_NAME'
+    - 'gcr.io/$PROJECT_ID/filesservice-api:$TAG_NAME'
     - '-t'
-    - 'gcr.io/$PROJECT_ID/file-service:latest' # Tag the image as 'latest' as well
+    - 'gcr.io/$PROJECT_ID/filesservice-api:latest' # Tag the image as 'latest' as well
     - '.'
     
 - name: 'gcr.io/cloud-builders/docker'
   id: Docker-Push
   args: 
     - 'push'
-    - 'gcr.io/$PROJECT_ID/file-service:$TAG_NAME'
-
-# 6. Deploy the Image (Optional)
-# Example of deploying to Cloud Run (replace with your service name)
-- name: 'gcr.io/cloud-builders/gcloud'
-  id: Deploy
-  args:
-    - 'run'
-    - 'deploy'
-    - 'file-service-ux'
-    - '--image'
-    - 'gcr.io/$PROJECT_ID/file-service:$TAG_NAME'
-    - '--region'
-    - 'northamerica-northeast2'
-    - '--platform'
-    - 'managed'
+    - 'gcr.io/$PROJECT_ID/filesservice-api:$TAG_NAME'
 
 images:
-- 'gcr.io/$PROJECT_ID/file-service:$TAG_NAME'
-- 'gcr.io/$PROJECT_ID/file-service:latest'
+- 'gcr.io/$PROJECT_ID/filesservice-api:$TAG_NAME'
+- 'gcr.io/$PROJECT_ID/filesservice-api:latest'
 
 options:
   # If you are using a custom service account, include one of these:
