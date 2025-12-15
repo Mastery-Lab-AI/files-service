@@ -1,0 +1,28 @@
+# ----------------------------------------------------------------------
+# cloudbuild-deploy.yaml for deploying the image
+# This trigger should be invoked AFTER the image has been pushed to GCR
+# ----------------------------------------------------------------------
+steps:
+# 1. Deploy the Image
+# Example of deploying to Cloud Run (replace with your service name)
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: Deploy
+  args:
+    - '-c'
+    - |
+      # Sanitize TAG_NAME: lowercase and replace dots with dashes
+      SANITIZED_VERSION=$(echo "$TAG_NAME" | tr '[:upper:]' '[:lower:]' | tr '.' '-')
+      
+      echo "Deploying version: $$SANITIZED_VERSION"
+      
+      gcloud run deploy prod-filesservice-api \
+        --image gcr.io/$PROJECT_ID/filesservice-api:$TAG_NAME \
+        --region northamerica-northeast2 \
+        --platform managed \
+        --revision-suffix "$${SANITIZED_VERSION}" \
+        --update-labels "version=$${SANITIZED_VERSION}" \
+        --allow-unauthenticated
+  entrypoint: bash
+
+options:
+  logging: CLOUD_LOGGING_ONLY 
