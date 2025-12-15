@@ -36,7 +36,7 @@ jobs:
 
       - name: Install dependencies
         # This is often needed, even just for 'npm version' to work correctly
-        run: npm install
+        run: npm ci 
 
       - name: ⚙️ Increment Version, Commit, and Tag
         run: |
