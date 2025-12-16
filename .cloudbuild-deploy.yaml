@@ -15,8 +15,8 @@ steps:
       
       echo "Deploying version: $$SANITIZED_VERSION"
       
-      gcloud run deploy prod-filesservice-api \
-        --image gcr.io/$PROJECT_ID/filesservice-api:$TAG_NAME \
+      gcloud run deploy ${_ENV_NAME}-${REPO_NAME}-api \
+        --image gcr.io/$PROJECT_ID/${REPO_NAME}-api:$TAG_NAME \
         --region northamerica-northeast2 \
         --platform managed \
         --revision-suffix "$${SANITIZED_VERSION}" \
