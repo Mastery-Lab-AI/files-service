@@ -7,14 +7,14 @@ steps:
   args: 
     - 'build'
     - '-t'
-    - 'gcr.io/$PROJECT_ID/fileservice-api:$TAG_NAME'
+    - 'gcr.io/$PROJECT_ID/filesservice-api:$TAG_NAME'
     - '.'
 
 - name: 'gcr.io/cloud-builders/docker'
   id: Docker-Push
   args: 
     - 'push'
-    - 'gcr.io/$PROJECT_ID/fileservice-api:$TAG_NAME'
+    - 'gcr.io/$PROJECT_ID/filesservice-api:$TAG_NAME'
 
 - name: 'gcr.io/cloud-builders/gcloud'
   id: Deploy
@@ -26,8 +26,8 @@ steps:
 
       echo "Deploying version: $${SANITIZED_VERSION}"
 
-      gcloud run deploy test-fileservice-api \
-        --image gcr.io/$PROJECT_ID/fileservice-api:${TAG_NAME} \
+      gcloud run deploy test-filesservice-api \
+        --image gcr.io/$PROJECT_ID/filesservice-api:${TAG_NAME} \
         --region northamerica-northeast2 \
         --platform managed \
         --revision-suffix "$${SANITIZED_VERSION}" \
@@ -36,7 +36,7 @@ steps:
   entrypoint: bash
     
 #images:
-#- 'gcr.io/$PROJECT_ID/fileservice-api:$TAG_NAME'
+#- 'gcr.io/$PROJECT_ID/filesservice-api:$TAG_NAME'
 
 options:
   # If you are using a custom service account, include one of these:
