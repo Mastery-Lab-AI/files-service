@@ -1,0 +1,45 @@
+# ----------------------------------------------------------------------
+# cloudbuild.yaml for TypeScript/Node.js Docker Build
+# ----------------------------------------------------------------------
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  id: Docker-Build
+  args: 
+    - 'build'
+    - '-t'
+    - 'gcr.io/$PROJECT_ID/fileservice-api:$TAG_NAME'
+    - '.'
+
+- name: 'gcr.io/cloud-builders/docker'
+  id: Docker-Push
+  args: 
+    - 'push'
+    - 'gcr.io/$PROJECT_ID/fileservice-api:$TAG_NAME'
+
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: Deploy
+  args:
+    - '-c'
+    - |
+      # Sanitize TAG_NAME: lowercase and replace dots with dashes
+      SANITIZED_VERSION=$(echo "${TAG_NAME}"| tr '[:upper:]' '[:lower:]' | tr '.' '-')
+
+      echo "Deploying version: $${SANITIZED_VERSION}"
+
+      gcloud run deploy test-fileservice-api \
+        --image gcr.io/$PROJECT_ID/fileservice-api:${TAG_NAME} \
+        --region northamerica-northeast2 \
+        --platform managed \
+        --revision-suffix "$${SANITIZED_VERSION}" \
+        --update-labels "version=$${SANITIZED_VERSION}" \
+        --allow-unauthenticated
+  entrypoint: bash
+    
+#images:
+#- 'gcr.io/$PROJECT_ID/fileservice-api:$TAG_NAME'
+
+options:
+  # If you are using a custom service account, include one of these:
+  logging: CLOUD_LOGGING_ONLY 
+  # default_logs_bucket_behavior: REGIONAL_USER_OWNED_BUCKET
+  diskSizeGb: '100' # Increase disk space if you have many dependencies or a large project
