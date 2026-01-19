@@ -46,7 +46,7 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Route prefixes via env (defaults preserved)
 const HEALTH_PREFIX = process.env.HEALTH_ROUTE_PREFIX || "/health";
-const WORKSPACE_PREFIX = process.env.WORKSPACE_ROUTE_PREFIX || "/workspace";
+const WORKSPACE_PREFIX = process.env.WORKSPACE_ROUTE_PREFIX || "/files/workspace";
 const FILES_PREFIX = process.env.FILES_ROUTE_PREFIX || "/files";
 
 app.use(HEALTH_PREFIX, healthRouter);
